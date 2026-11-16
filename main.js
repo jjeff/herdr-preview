@@ -62,14 +62,17 @@ class ImageDoc {
 }
 // hc read falls back to the bare screen when a full-screen program (Claude
 // Code) has less history than asked for, so step down until it stitches.
+// Each read is a trip through herdr-core (and the network, for another
+// machine), so start at the depth that worked last time for this terminal.
 const DEPTHS = [2000, 1000, 500, 200, 100, 50];
+const depthOf = new Map();
 async function readTerminal(address) {
   let last = "";
-  for (const n of DEPTHS) {
-    const r = await hc(["read", address, "--json", "--lines", String(n)]);
+  for (let i = depthOf.get(address) ?? 0; i < DEPTHS.length; i++) {
+    const r = await hc(["read", address, "--json", "--lines", String(DEPTHS[i])]);
     if (r.code !== 0) throw new Error(r.stderr.trim() || "hc read failed");
     const d = JSON.parse(r.stdout);
-    if (d.complete) return d.text;
+    if (d.complete) { depthOf.set(address, i); return d.text; }
     last ||= d.text;
   }
   return last;
