@@ -12,7 +12,7 @@ import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { createHash } from "crypto";
 import { Buffer } from "buffer";
 import { MarkdownDoc, tildePath } from "./doc.js";
-import { mentions } from "./mentions.js";
+import { mentions, folders } from "./mentions.js";
 
 const ICONS = "mods/preview/icons";
 const IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
@@ -79,9 +79,16 @@ const nameOf = (path) => path.split("/").pop();
 // machine's home), in the same order. Then a SPLIT line, then the folder's own
 // Markdown: what git tracks, else a shallow look (no node_modules or hidden folders).
 const SPLIT = "::preview-folder::";
-const RESOLVE = `cd "$1" 2>/dev/null && inside=1; shift
+const RESOLVE = `cd "$1" 2>/dev/null && inside=1; dirs=$2; shift 2
+nl='
+'
 for p; do
   case $p in "~/"*) p="$HOME/\${p#??}";; esac
+  # A relative path: the terminal's folder first, then the folders it printed.
+  case $p in /*) ;; *) f=$p; IFS=$nl; for d in $dirs; do
+    case $d in "~/"*) d="$HOME/\${d#??}";; esac
+    [ -f "$f" ] && break; f="$d/$p"
+  done; unset IFS; p=$f;; esac
   [ -f "$p" ] || continue
   d=$(cd "$(dirname "$p")" && pwd -P) && printf '%s/%s\\n' "$d" "$(basename "$p")"
 done
@@ -154,12 +161,14 @@ export default class Preview extends View {
     cx.spawn(async (cx) => {
       try {
         // Remember what each terminal mentioned, so paths that scroll away stay listed.
-        const seen = (this.seen ??= new Map()).get(at.address) ?? [];
-        const found = [...new Set([...mentions(await readTerminal(at.address)), ...seen])].slice(0, 60);
-        this.seen.set(at.address, found);
+        const seen = (this.seen ??= new Map()).get(at.address) ?? { found: [], dirs: [] };
+        const text = await readTerminal(at.address);
+        const found = [...new Set([...mentions(text), ...seen.found])].slice(0, 60);
+        const dirs = [...new Set([...folders(text), ...seen.dirs])].slice(0, 30);
+        this.seen.set(at.address, { found, dirs });
         let files = found, folder = [];
         // ponytail: sh-only; a Windows machine shows the paths unchecked and no folder list.
-        const ok = await exec("sh", ["-c", RESOLVE, "sh", at.cwd, ...found], { on: at.on }).catch(() => null);
+        const ok = await exec("sh", ["-c", RESOLVE, "sh", at.cwd, dirs.join("\n"), ...found], { on: at.on }).catch(() => null);
         if (ok?.code === 0) {
           const [mentioned, inFolder = ""] = ok.stdout.split(SPLIT + "\n");
           files = [...new Set(mentioned.split("\n").filter(Boolean))];

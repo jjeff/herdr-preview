@@ -70,8 +70,10 @@ and `layout.show` (`{"id":"panel"}`) commands.
   screen when asked for more history than the terminal has, so the panel
   steps down from 2000 lines until a read is complete. Paths a terminal has
   mentioned stay listed until the app restarts.
-- A **bare filename** the agent mentioned that isn't in the terminal's folder
-  is dropped; there is no search of subfolders.
+- A relative path or bare filename is looked up in the terminal's folder,
+  then in the folders the terminal printed (an agent that `cd`s elsewhere, or
+  started in one repo and works in another). One that is in none of them is
+  dropped; there is no search of subfolders.
 - Plain shells report no agent status, so they refresh only on ↻.
 - Images are copied into `~/.config/herdr-app/cache/preview` to be shown
   (Herdr loads images only from its own folder). Another machine's image
