@@ -171,9 +171,12 @@ export default class Preview extends View {
   // keep: leave the current list up while it's read again (same terminal).
   scan(cx, keep = false) {
     const at = this.at, n = ++this.scans;
-    this.busy = (this.busy ?? 0) + 1; cx.notify();
+    this.busy = (this.busy ?? 0) + 1;
     if (!keep) { this.files = null; this.folder = []; this.error = null; }
     cx.spawn(async (cx) => {
+      // spawn runs its body at once, and scan can be called from render, where
+      // notify throws: draw the spinner only after the first await.
+      await null; cx.notify();
       try {
         // Remember what each terminal mentioned, so paths that scroll away stay listed.
         const seen = (this.seen ??= new Map()).get(at.address) ?? { found: [], dirs: [] };
