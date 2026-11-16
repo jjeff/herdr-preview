@@ -1,4 +1,4 @@
-herdr-md-anywhere, a Markdown side panel for the Herdr app
+herdr-preview, a file preview side panel for the Herdr app
 Copyright 2026 jjeff
 
 doc.js and blocks.js (the Markdown renderer and in-place editor) and the
