@@ -167,6 +167,7 @@ export default class Preview extends View {
   // keep: leave the current list up while it's read again (same terminal).
   scan(cx, keep = false) {
     const at = this.at, n = ++this.scans;
+    this.busy = (this.busy ?? 0) + 1; cx.notify();
     if (!keep) { this.files = null; this.folder = []; this.error = null; }
     cx.spawn(async (cx) => {
       try {
@@ -186,6 +187,7 @@ export default class Preview extends View {
         }
         if (n === this.scans) { this.files = files; this.folder = folder; this.error = null; }
       } catch (e) { if (n === this.scans) { this.files = []; this.error = String(e?.message ?? e); } }
+      this.busy--;
       cx.notify();
     });
   }
@@ -231,9 +233,12 @@ export default class Preview extends View {
   render(cx) {
     this.follow(cx);
     const t = theme(), doc = this.doc;
-    const button = (id, icon, tip, action) => div().id(id).p(4).rounded(6).cursor_pointer().text_color(t.muted).tooltip(tip)
+    const button = (id, icon, tip, action, spin = false) => div().id(id).p(4).rounded(6).cursor_pointer().text_color(spin ? t.foreground : t.muted).tooltip(tip)
       .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => action(cx))
-      .child(svg(`${ICONS}/${icon}.svg`).size(14));
+      .child(svg(`${ICONS}/${icon}.svg`).size(14).when(spin, (el) => el.spin(900)));
+    // Spins while the terminal is being read: on ↻, and on the panel's own
+    // looks (focus change, the agent starting or finishing a turn).
+    const looking = !doc && this.busy > 0;
     const where = this.at ? (this.at.on ? `${this.at.on} · ${this.at.address}` : this.at.address) : "";
     return v_flex().id("preview").track_focus(this.handle).size_full().min_h(0).bg(t.background).text_color(t.foreground).text_size(13)
       .on_key_down((e, cx) => doc?.key(e, cx))
@@ -243,8 +248,8 @@ export default class Preview extends View {
           .child(div().truncate().font_semibold().child(doc ? nameOf(doc.path) : "Preview"))
           .child(div().truncate().text_size(11).text_color(t.dim).child(doc ? tildePath(folderOf(doc.path), doc.on) : where)))
         .children(doc ? doc.controls(t, "mda") : [])
-        .when(!doc || !doc.editing, (el) => el.child(button("mda-refresh", "refresh", doc ? "Read again" : "Look again",
-          (cx) => doc ? doc.load(cx) : this.at && this.scan(cx)))))
+        .when(!doc || !doc.editing, (el) => el.child(button("mda-refresh", "refresh", doc ? "Read again" : looking ? "Looking…" : "Look again",
+          (cx) => doc ? doc.load(cx) : this.at && this.scan(cx), looking))))
       .child(doc ? doc.body(t, "mda-doc") : this.listView(t));
   }
 

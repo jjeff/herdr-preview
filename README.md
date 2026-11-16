@@ -30,6 +30,7 @@ where you are.
   (double-click a block), other local text files with Edit; saves never
   overwrite a change an agent made meanwhile.
 - Refreshes when the terminal's agent starts or finishes a turn, and on ↻.
+  The ↻ button spins while the panel is looking.
   An open file reloads as it changes (local) or every 3 seconds (other
   machines).
 - Follows the focused terminal; clicking into the panel keeps the last one.
