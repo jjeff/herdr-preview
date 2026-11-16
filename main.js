@@ -26,10 +26,17 @@ class ImageDoc {
   load(cx) {
     cx.spawn(async (cx) => {
       try {
-        // ponytail: another machine's file comes over as base64 in exec's output; fine for screenshots, slow for huge files.
-        const bytes = this.on
-          ? Buffer.from((await exec("sh", ["-c", 'base64 < "$1"', "sh", this.path], { on: this.on })).stdout, "base64")
-          : await readFile(this.path);
+        // Another machine's file: its checksum first, and the bytes (as base64) only when that changed.
+        // ponytail: a changed huge image still comes over whole; fine for screenshots.
+        let bytes;
+        if (this.on) {
+          const r = await exec("sh", ["-c", 'c=$(cksum < "$1") || exit 1; echo "$c"; [ "$c" = "$2" ] || base64 < "$1"', "sh", this.path, this.sum ?? ""], { on: this.on });
+          if (r.code !== 0) throw new Error(r.stderr.trim() || "not found");
+          const nl = r.stdout.indexOf("\n");
+          if (r.stdout.slice(0, nl) === this.sum && this.src) { this.error = null; return; }
+          this.sum = r.stdout.slice(0, nl);
+          bytes = Buffer.from(r.stdout.slice(nl + 1), "base64");
+        } else bytes = await readFile(this.path);
         if (!bytes.length) throw new Error("empty or unreadable");
         const name = `${CACHE}/${createHash("sha1").update(bytes).digest("hex")}.${IMAGE.exec(this.path)[1].toLowerCase()}`;
         if (name !== this.src) {

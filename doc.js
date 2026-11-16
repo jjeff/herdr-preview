@@ -41,7 +41,12 @@ export function linkTarget(url, docPath) {
 // Files shown as one highlighted block instead of parsed as Markdown, by extension.
 const PLAIN = { txt: "text", log: "text", csv: "text", tsv: "text", json: "json", jsonl: "json", yaml: "yaml", yml: "yaml", toml: "toml", xml: "xml", ini: "ini", conf: "ini" };
 export const plainLanguage = (path) => PLAIN[/\.(\w+)$/.exec(path)?.[1].toLowerCase()] ?? null;
+const PLAIN_LINES = 2000;
+// Only the end of a long file: a log grows at the bottom.
 const fenced = (text, lang) => {
+  let lines = text.split("\n");
+  if (lines.length > PLAIN_LINES) lines = [`… (first ${lines.length - PLAIN_LINES} lines not shown)`, ...lines.slice(-PLAIN_LINES)];
+  text = lines.join("\n");
   const fence = "`".repeat(Math.max(3, ...(text.match(/`+/g) ?? []).map((m) => m.length + 1)));
   return [fence + lang, ...text.split("\n"), fence];
 };
@@ -82,7 +87,7 @@ export class MarkdownDoc {
         if (text === this.saved) return;
         // Yours, not saved yet, and the file moved on: you choose which stays.
         if (this.dirty) { this.conflict = true; this.disk = text; return; }
-        this.saved = text; this.big = text.length > MAX_TEXT;
+        this.saved = text; this.big = text.length > MAX_TEXT || (Boolean(this.lang) && text.split("\n").length > PLAIN_LINES);
         this.setText(text);
       } catch (e) { this.error = `Cannot read this file: ${e?.message ?? e}`; }
       finally { cx.notify(); }

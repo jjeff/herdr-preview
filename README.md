@@ -79,8 +79,10 @@ and `layout.show` (`{"id":"panel"}`) commands.
 - Plain shells report no agent status, so they refresh only on ↻.
 - Images are copied into `~/.config/herdr-app/cache/preview` to be shown
   (Herdr loads images only from its own folder). Another machine's image
-  comes over as base64 every 3 seconds while open: fine for screenshots,
-  slow for very large files.
+  is checked every 3 seconds while open and copied over (as base64) only
+  when its checksum changed.
+- Text-like files longer than 2000 lines show only their last 2000 lines
+  and are not editable.
 - The "In this folder" list is Markdown only.
 - Path checks use `sh`; on a Windows machine the paths are listed unchecked
   and there is no "In this folder" list.
