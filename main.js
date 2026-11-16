@@ -7,7 +7,7 @@
 // doc.js and blocks.js are copies of markdown-panel's (from herdr-kanso).
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, focused, terminals, hc, exec, watchFolder, theme, appHome } from "herdr";
+import { spaces, focused, terminals, hc, exec, watchFolder, theme, appHome, props, openOverlay, closeOverlay } from "herdr";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { createHash } from "crypto";
 import { Buffer } from "buffer";
@@ -57,7 +57,9 @@ class ImageDoc {
     if (this.error) return div().p(16).text_color(t.dim).child(this.error);
     if (!this.src) return div().p(16).text_color(t.dim).child("Reading…");
     return div().id(`${id}-scroll`).flex_1().min_h(0).overflow_y_scrollbar().p(12)
-      .child(image(this.src).max_w_full());
+      .child(div().id(`${id}-img`).cursor_pointer().tooltip("Show larger")
+        .on_click(() => openOverlay({ mod: "preview", props: { image: this.src, name: nameOf(this.path) }, kind: "dialog", width: 0.92, height: 0.92 }))
+        .child(image(this.src).max_w_full()));
   }
 }
 // hc read falls back to the bare screen when a full-screen program (Claude
@@ -128,6 +130,8 @@ function target() {
 
 export default class Preview extends View {
   init(_props, cx) {
+    // Opened as an overlay to show one image large: nothing else to set up.
+    if ((this.lightbox = props()?.image ? props() : null)) return;
     this.at = null; this.files = null; this.folder = []; this.doc = null; this.error = null; this.scans = 0;
     this.handle = cx.focus_handle();
     // Herdr doesn't redraw a mod when an agent's status changes, so look on a
@@ -230,7 +234,20 @@ export default class Preview extends View {
     });
   }
 
+  // The image filling a dialog; a click anywhere (or Esc, or outside) closes it.
+  lightboxView() {
+    const t = theme(), { image: src, name, overlay } = this.lightbox;
+    return v_flex().id("mda-lightbox").size_full().bg(t.background).text_color(t.foreground).cursor_pointer()
+      .on_click(() => closeOverlay(overlay))
+      .child(h_flex().h(36).flex_none().px(12).gap(8).items_center()
+        .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.dim).child(name ?? ""))
+        .child(div().id("mda-lightbox-close").p(4).rounded(6).text_color(t.muted).tooltip("Close (Esc)")
+          .hover((s) => s.bg(t.hover).text_color(t.foreground)).child(svg(`${ICONS}/close.svg`).size(14))))
+      .child(div().flex_1().min_h(0).p(12).child(image(src).size_full()));
+  }
+
   render(cx) {
+    if (this.lightbox) return this.lightboxView();
     this.follow(cx);
     const t = theme(), doc = this.doc;
     const button = (id, icon, tip, action, spin = false) => div().id(id).p(4).rounded(6).cursor_pointer().text_color(spin ? t.foreground : t.muted).tooltip(tip)

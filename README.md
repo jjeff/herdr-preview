@@ -26,7 +26,8 @@ where you are.
 - Click a list heading to fold it. "In this folder" starts folded, with its
   count shown.
 - Shows a file formatted: Markdown rendered, text-like files as one
-  highlighted block, images full width. Local Markdown can be edited in place
+  highlighted block, images full width. Click an image to see it over the
+  whole window; Esc or a click closes it. Local Markdown can be edited in place
   (double-click a block), other local text files with Edit; saves never
   overwrite a change an agent made meanwhile.
 - Refreshes when the terminal's agent starts or finishes a turn, and on ↻.
