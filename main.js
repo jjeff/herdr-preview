@@ -1,17 +1,58 @@
-// Markdown anywhere: a side panel (beside Files and Changes) that lists the
-// Markdown files the focused terminal has mentioned, newest first, and shows
-// one formatted. Works on any machine Herdr is connected to: the terminal's
+// Preview: a side panel (beside Files and Changes) that lists the files the
+// focused terminal has mentioned (Markdown, text-like data, images), newest
+// first, and shows one formatted. Works on any machine Herdr is connected to: the terminal's
 // output comes from `hc read` and the file from that machine through
 // herdr-core, so nothing needs to be mounted. Local files can be edited;
 // other machines' files are read-only (writeTextFile has no `on`).
 // doc.js and blocks.js are copies of markdown-panel's (from herdr-kanso).
-import { View, div, svg } from "gpui-kit";
+import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, focused, terminals, hc, exec, watchFolder, theme } from "herdr";
+import { spaces, focused, terminals, hc, exec, watchFolder, theme, appHome } from "herdr";
+import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { createHash } from "crypto";
+import { Buffer } from "buffer";
 import { MarkdownDoc, tildePath } from "./doc.js";
 import { mentions } from "./mentions.js";
 
-const ICONS = "mods/md-anywhere/icons";
+const ICONS = "mods/preview/icons";
+const IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+// image() only loads from the app's own folder, so a picture is copied here first.
+const CACHE = "cache/preview";
+
+// An image file, shown with the same interface main.js uses for MarkdownDoc.
+// Read again on the same timer/watch; a new copy is written only when the bytes change.
+class ImageDoc {
+  constructor(path, on) { this.path = path; this.on = on; this.editing = false; this.src = null; this.error = null; }
+  load(cx) {
+    cx.spawn(async (cx) => {
+      try {
+        // ponytail: another machine's file comes over as base64 in exec's output; fine for screenshots, slow for huge files.
+        const bytes = this.on
+          ? Buffer.from((await exec("sh", ["-c", 'base64 < "$1"', "sh", this.path], { on: this.on })).stdout, "base64")
+          : await readFile(this.path);
+        if (!bytes.length) throw new Error("empty or unreadable");
+        const name = `${CACHE}/${createHash("sha1").update(bytes).digest("hex")}.${IMAGE.exec(this.path)[1].toLowerCase()}`;
+        if (name !== this.src) {
+          await mkdir(`${appHome()}/${CACHE}`, { recursive: true });
+          await writeFile(`${appHome()}/${name}`, bytes);
+          this.release(); this.src = name;
+        }
+        this.error = null;
+      } catch (e) { this.error = `Cannot read this image: ${e?.message ?? e}`; }
+      cx.notify();
+    });
+  }
+  flush() { return Promise.resolve(true); }
+  release() { if (this.src) unlink(`${appHome()}/${this.src}`).catch(() => {}); }
+  controls() { return []; }
+  key() {}
+  body(t, id) {
+    if (this.error) return div().p(16).text_color(t.dim).child(this.error);
+    if (!this.src) return div().p(16).text_color(t.dim).child("Reading…");
+    return div().id(`${id}-scroll`).flex_1().min_h(0).overflow_y_scrollbar().p(12)
+      .child(image(this.src).max_w_full());
+  }
+}
 // hc read falls back to the bare screen when a full-screen program (Claude
 // Code) has less history than asked for, so step down until it stitches.
 const DEPTHS = [2000, 1000, 500, 200, 100, 50];
@@ -37,7 +78,7 @@ const nameOf = (path) => path.split("/").pop();
 // exist there, made absolute (relative to the terminal's folder, ~ to that
 // machine's home), in the same order. Then a SPLIT line, then the folder's own
 // Markdown: what git tracks, else a shallow look (no node_modules or hidden folders).
-const SPLIT = "::md-anywhere-folder::";
+const SPLIT = "::preview-folder::";
 const RESOLVE = `cd "$1" 2>/dev/null && inside=1; shift
 for p; do
   case $p in "~/"*) p="$HOME/\${p#??}";; esac
@@ -68,7 +109,7 @@ function target() {
   return { address, on, cwd: f.cwd || space?.folder || "" };
 }
 
-export default class MarkdownAnywhere extends View {
+export default class Preview extends View {
   init(_props, cx) {
     this.at = null; this.files = null; this.folder = []; this.doc = null; this.error = null; this.scans = 0;
     this.handle = cx.focus_handle();
@@ -135,7 +176,7 @@ export default class MarkdownAnywhere extends View {
     cx.spawn(async (cx) => {
       if (before && !(await before.flush())) { cx.notify(); return; }
       before?.release();
-      this.doc = new MarkdownDoc(path, on, (to) => this.open(to, cx), ICONS);
+      this.doc = IMAGE.test(path) ? new ImageDoc(path, on) : new MarkdownDoc(path, on, (to) => this.open(to, cx), ICONS);
       this.doc.load(cx);
       if (on) this.poll(path, cx); else this.watch(path, cx); // watchFolder is local only
       cx.notify();
@@ -175,12 +216,12 @@ export default class MarkdownAnywhere extends View {
       .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => action(cx))
       .child(svg(`${ICONS}/${icon}.svg`).size(14));
     const where = this.at ? (this.at.on ? `${this.at.on} · ${this.at.address}` : this.at.address) : "";
-    return v_flex().id("md-anywhere").track_focus(this.handle).size_full().min_h(0).bg(t.background).text_color(t.foreground).text_size(13)
+    return v_flex().id("preview").track_focus(this.handle).size_full().min_h(0).bg(t.background).text_color(t.foreground).text_size(13)
       .on_key_down((e, cx) => doc?.key(e, cx))
       .child(h_flex().h(42).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
         .when(Boolean(doc), (el) => el.child(button("mda-back", "chevron-left", "Back to file list", (cx) => this.back(cx))))
         .child(v_flex().flex_1().min_w(0).pl(doc ? 0 : 4)
-          .child(div().truncate().font_semibold().child(doc ? nameOf(doc.path) : "Markdown"))
+          .child(div().truncate().font_semibold().child(doc ? nameOf(doc.path) : "Preview"))
           .child(div().truncate().text_size(11).text_color(t.dim).child(doc ? tildePath(folderOf(doc.path), doc.on) : where)))
         .children(doc ? doc.controls(t, "mda") : [])
         .when(!doc || !doc.editing, (el) => el.child(button("mda-refresh", "refresh", doc ? "Read again" : "Look again",
@@ -190,8 +231,8 @@ export default class MarkdownAnywhere extends View {
 
   listView(t) {
     const note = (text) => div().p(16).text_size(12.5).text_color(t.dim).child(text);
-    if (!this.at) return note("Focus a terminal to see the Markdown files it mentioned.");
-    if (this.files === null) return note("Looking for Markdown…");
+    if (!this.at) return note("Focus a terminal to see the files it mentioned.");
+    if (this.files === null) return note("Looking for files…");
     if (this.error) return note(`Cannot read this terminal: ${this.error}`);
     const heading = (text) => div().px(10).pt(10).pb(4).text_size(11).font_semibold().text_color(t.dim).child(text);
     const row = (key) => (f, i) => v_flex().id(`mda-${key}-${i}`).px(10).py(5).rounded(6).cursor_pointer()
@@ -200,7 +241,7 @@ export default class MarkdownAnywhere extends View {
       .child(div().truncate().text_size(11.5).text_color(t.dim).child(tildePath(folderOf(f), null)));
     return v_flex().id("mda-files").flex_1().min_h(0).overflow_y_scrollbar().p(6)
       .child(heading("Mentioned"))
-      .when(!this.files.length, (el) => el.child(div().px(10).py(4).text_size(12.5).text_color(t.dim).child("No Markdown mentioned yet.")))
+      .when(!this.files.length, (el) => el.child(div().px(10).py(4).text_size(12.5).text_color(t.dim).child("No files mentioned yet.")))
       .children(this.files.map(row("t")))
       .when(this.folder.length > 0, (el) => el.child(heading("In this folder")).children(this.folder.map(row("f"))));
   }

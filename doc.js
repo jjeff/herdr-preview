@@ -38,6 +38,14 @@ export function linkTarget(url, docPath) {
   return { file: "/" + out.join("/") };
 }
 
+// Files shown as one highlighted block instead of parsed as Markdown, by extension.
+const PLAIN = { txt: "text", log: "text", csv: "text", tsv: "text", json: "json", jsonl: "json", yaml: "yaml", yml: "yaml", toml: "toml", xml: "xml", ini: "ini", conf: "ini" };
+export const plainLanguage = (path) => PLAIN[/\.(\w+)$/.exec(path)?.[1].toLowerCase()] ?? null;
+const fenced = (text, lang) => {
+  const fence = "`".repeat(Math.max(3, ...(text.match(/`+/g) ?? []).map((m) => m.length + 1)));
+  return [fence + lang, ...text.split("\n"), fence];
+};
+
 export class MarkdownDoc {
   // path: absolute; on: the machine (null here). onOpen(path) follows a link
   // to another file; without it, links to files do nothing.
@@ -53,7 +61,10 @@ export class MarkdownDoc {
     this.source = null;  // the whole file as Markdown, while "Source" is on
     this.conflict = false; this.saving = false; this.seq = 0;
     this.error = null; this.big = false;
+    this.lang = plainLanguage(path); // not Markdown: shown whole, edited only as source
   }
+
+  parse(text) { return this.lang ? [{ kind: "code", lines: fenced(text, this.lang) }] : parseBlocks(text); }
 
   get canEdit() { return !this.on && this.saved !== null && !this.big; }
   get dirty() { return this.text !== null && this.text !== this.saved; }
@@ -82,14 +93,14 @@ export class MarkdownDoc {
   setText(text) {
     this.close();
     this.text = text;
-    this.blocks = parseBlocks(text);
+    this.blocks = this.parse(text);
     this.source?.set_value(text);
   }
 
   // ---- Editing one block -----------------------------------------------------
 
   open(i, cx) {
-    if (!this.canEdit || this.conflict) return;
+    if (!this.canEdit || this.conflict || this.lang) return;
     if (this.active === i) return;
     this.close();
     const b = this.blocks[i];
@@ -148,7 +159,7 @@ export class MarkdownDoc {
   close() {
     this.box?.release(); this.box = null;
     this.releaseCells();
-    if (this.active !== null && this.text !== null) this.blocks = parseBlocks(this.text);
+    if (this.active !== null && this.text !== null) this.blocks = this.parse(this.text);
     this.active = null;
   }
 
@@ -231,11 +242,11 @@ export class MarkdownDoc {
     if (!this.canEdit) return;
     if (this.source) {
       this.source.release(); this.source = null;
-      this.blocks = parseBlocks(this.text);
+      this.blocks = this.parse(this.text);
     } else {
       this.close();
       const t = theme();
-      this.source = EditorState.new({ language: "markdown", value: this.text, soft_wrap: true, line_numbers: false, folding: false,
+      this.source = EditorState.new({ language: this.lang ?? "markdown", value: this.text, soft_wrap: true, line_numbers: false, folding: false,
         font_family: settings().font_family, font_size: 12.5,
         syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6, punctuation: t.dim } });
       this.source.on("change", (_e, cx) => { this.text = this.source.value(); this.later(cx); cx.notify(); });
@@ -268,8 +279,8 @@ export class MarkdownDoc {
         .when(Boolean(this.source), (el) => el.bg(t.selected).text_color(t.foreground))
         .when(!this.source, (el) => el.text_color(t.muted))
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
-        .tooltip(this.source ? "Back to the formatted document" : "Edit the whole file as Markdown")
-        .on_click((_e, cx) => this.toggleSource(cx)).child(this.source ? "Formatted" : "Source"));
+        .tooltip(this.source ? "Back to the formatted document" : this.lang ? "Edit the file" : "Edit the whole file as Markdown")
+        .on_click((_e, cx) => this.toggleSource(cx)).child(this.source ? (this.lang ? "View" : "Formatted") : (this.lang ? "Edit" : "Source")));
     }
     return out;
   }

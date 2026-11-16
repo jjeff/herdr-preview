@@ -1,8 +1,8 @@
-# herdr-md-anywhere
+# herdr-preview
 
 A side panel for the [Herdr](https://github.com/herdrdev/herdr-app) app that
-lists the Markdown files the focused terminal has mentioned and shows them
-formatted — on **any machine Herdr is connected to**, with nothing mounted.
+lists the files the focused terminal has mentioned — Markdown, text-like data
+files and images — and shows them formatted — on **any machine Herdr is connected to**, with nothing mounted.
 
 Coding agents print paths that are local to the machine they run on. When that 
 machine is a remote one, those paths mean nothing to your desktop. This panel
@@ -13,15 +13,20 @@ where you are.
 ## What it does
 
 - Reads the focused terminal's screen and history (`hc read`), finds every
-  `.md`, `.markdown` and `.mdx` path in it — absolute, `~/…`, relative to the
+  previewable path in it — Markdown (`.md`, `.markdown`, `.mdx`), text-like
+  files (`.txt`, `.log`, `.csv`, `.tsv`, `.json`, `.jsonl`, `.yaml`, `.yml`,
+  `.toml`, `.xml`, `.ini`, `.conf`) and images (`.png`, `.jpg`, `.gif`,
+  `.webp`, `.bmp`, `.svg`) — absolute, `~/…`, relative to the
   terminal's folder, `file://` links and `path.md:42` references — and lists
   them **newest first**.
 - Keeps only the paths that exist on the terminal's machine.
 - Lists the terminal folder's own Markdown below the mentioned files ("In this folder"):
   what git tracks, else a search three levels deep that skips hidden folders
   and `node_modules`.
-- Shows a file formatted. Local files can be edited in place (double-click a
-  block); saves never overwrite a change an agent made meanwhile.
+- Shows a file formatted: Markdown rendered, text-like files as one
+  highlighted block, images full width. Local Markdown can be edited in place
+  (double-click a block), other local text files with Edit; saves never
+  overwrite a change an agent made meanwhile.
 - Refreshes when the terminal's agent starts or finishes a turn, and on ↻.
   An open file reloads as it changes (local) or every 3 seconds (other
   machines).
@@ -30,8 +35,8 @@ where you are.
 ## Install
 
 ```sh
-git clone https://github.com/jjeff/herdr-md-anywhere ~/.config/herdr-app/mods/md-anywhere
-herdr-app check ~/.config/herdr-app/mods/md-anywhere
+git clone https://github.com/jjeff/herdr-preview ~/.config/herdr-app/mods/preview
+herdr-app check ~/.config/herdr-app/mods/preview
 ```
 
 Clone it into the mods folder itself. Herdr does not load a mod's icons
@@ -43,14 +48,14 @@ Herdr's shipped layouts are read-only, so clone one first
 this child to the `panel-body` stack in `layouts/my-layout.json`:
 
 ```json
-{ "id": "markdown", "type": "block", "content": { "mod": "md-anywhere" } }
+{ "id": "markdown", "type": "block", "content": { "mod": "preview" } }
 ```
 
 Add a button for it to your tab-bar mod beside the Files and Changes ones. In
 a clone of the shipped `tabs` mod, that is one more panel button:
 
 ```js
-.child(panelButton("markdown", "Markdown", "mods/md-anywhere/icons/markdown.svg"))
+.child(panelButton("markdown", "Preview", "mods/preview/icons/markdown.svg"))
 ```
 
 and `"markdown"` in the list of enabled panels. Or open it from a key in
@@ -68,6 +73,11 @@ and `layout.show` (`{"id":"panel"}`) commands.
 - A **bare filename** the agent mentioned that isn't in the terminal's folder
   is dropped; there is no search of subfolders.
 - Plain shells report no agent status, so they refresh only on ↻.
+- Images are copied into `~/.config/herdr-app/cache/preview` to be shown
+  (Herdr loads images only from its own folder). Another machine's image
+  comes over as base64 every 3 seconds while open: fine for screenshots,
+  slow for very large files.
+- The "In this folder" list is Markdown only.
 - Path checks use `sh`; on a Windows machine the paths are listed unchecked
   and there is no "In this folder" list.
 
