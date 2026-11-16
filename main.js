@@ -243,15 +243,22 @@ export default class Preview extends View {
     if (!this.at) return note("Focus a terminal to see the files it mentioned.");
     if (this.files === null) return note("Looking for files…");
     if (this.error) return note(`Cannot read this terminal: ${this.error}`);
-    const heading = (text) => div().px(10).pt(10).pb(4).text_size(11).font_semibold().text_color(t.dim).child(text);
+    // Click a heading to fold its list. "In this folder" starts folded.
+    // ponytail: remembered for this run only; localStorage needs the storage capability.
+    const shut = (this.shut ??= new Set(["folder"]));
+    const heading = (key, text, n) => div().id(`mda-h-${key}`).px(10).pt(10).pb(4).text_size(11).font_semibold().text_color(t.dim)
+      .cursor_pointer().hover((s) => s.text_color(t.foreground))
+      .on_click((_e, cx) => { shut.has(key) ? shut.delete(key) : shut.add(key); cx.notify(); })
+      .child(`${shut.has(key) ? "▸" : "▾"} ${text}${shut.has(key) && n ? ` (${n})` : ""}`);
     const row = (key) => (f, i) => v_flex().id(`mda-${key}-${i}`).px(10).py(5).rounded(6).cursor_pointer()
       .hover((s) => s.bg(t.hover)).on_click((_e, cx) => this.open(f, cx))
       .child(div().truncate().child(nameOf(f)))
       .child(div().truncate().text_size(11.5).text_color(t.dim).child(tildePath(folderOf(f), null)));
     return v_flex().id("mda-files").flex_1().min_h(0).overflow_y_scrollbar().p(6)
-      .child(heading("Mentioned"))
-      .when(!this.files.length, (el) => el.child(div().px(10).py(4).text_size(12.5).text_color(t.dim).child("No files mentioned yet.")))
-      .children(this.files.map(row("t")))
-      .when(this.folder.length > 0, (el) => el.child(heading("In this folder")).children(this.folder.map(row("f"))));
+      .child(heading("t", "Mentioned", this.files.length))
+      .when(!shut.has("t") && !this.files.length, (el) => el.child(div().px(10).py(4).text_size(12.5).text_color(t.dim).child("No files mentioned yet.")))
+      .children(shut.has("t") ? [] : this.files.map(row("t")))
+      .when(this.folder.length > 0, (el) => el.child(heading("folder", "In this folder", this.folder.length))
+        .children(shut.has("folder") ? [] : this.folder.map(row("f"))));
   }
 }

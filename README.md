@@ -23,6 +23,8 @@ where you are.
 - Lists the terminal folder's own Markdown below the mentioned files ("In this folder"):
   what git tracks, else a search three levels deep that skips hidden folders
   and `node_modules`.
+- Click a list heading to fold it. "In this folder" starts folded, with its
+  count shown.
 - Shows a file formatted: Markdown rendered, text-like files as one
   highlighted block, images full width. Local Markdown can be edited in place
   (double-click a block), other local text files with Edit; saves never
