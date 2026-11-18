@@ -8,4 +8,7 @@ assert.deepEqual(mentions("shot at /tmp/a.PNG, data in out.json:3 and notes.txt.
 assert.deepEqual(mentions("nothing here but main.rs and photo.heic"), []);
 assert.deepEqual(folders("cd /Users/me/Code/site/src && ls ~/Code/ops."),
   ["~/Code/ops", "~/Code", "/Users/me/Code/site/src", "/Users/me/Code/site", "/Users/me/Code"]);
+const wrapped = "  › [image]/private/tmp/x/scratc\n  hpad/ui-1.png  (172.4KB)\nsee /usr/local\nbin.md";
+assert.ok(mentions(wrapped).includes("/private/tmp/x/scratchpad/ui-1.png"));
+assert.ok(!mentions("cd /usr/local\nls notes.md").includes("/usr/localls"));
 console.log("mentions: ok");

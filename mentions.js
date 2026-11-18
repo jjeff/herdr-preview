@@ -1,4 +1,12 @@
-const tokensOf = (text) => text.split(/[\s`'"()<>\[\]{}|,*]+/).reverse()
+const EXT = /[\w-]\.(md|markdown|mdx|txt|log|csv|tsv|json|jsonl|ya?ml|toml|xml|ini|conf|png|jpe?g|gif|webp|bmp|svg)$/i;
+
+// Agents hard-wrap long lines, splitting a path across two. Rejoin a path that
+// breaks at a line end when the halves together name a previewable file.
+// ponytail: two lines only; a path wrapped over three stays broken.
+const unwrap = (text) => text.replace(/(\S*\/\S*)\n[ \t]*(\S+)/g,
+  (m, a, b) => !EXT.test(a) && EXT.test((a + b).replace(/[.:;!?]+$/, "").replace(/(:\d+)+$/, "")) ? m + " " + a + b : m);
+
+const tokensOf = (text) => unwrap(text).split(/[\s`'"()<>\[\]{}|,*]+/).reverse()
   .map((t) => t.replace(/^file:\/\//, "").replace(/(:\d+)+$/, "").replace(/[.:;!?]+$/, ""));
 
 // Previewable file paths (Markdown, text-like data, images) in terminal text, last mentioned first.
@@ -6,7 +14,7 @@ export function mentions(text) {
   const seen = new Set(), out = [];
   for (const t of tokensOf(text)) {
     if (t.includes("://")) continue;
-    if (!/[\w-]\.(md|markdown|mdx|txt|log|csv|tsv|json|jsonl|ya?ml|toml|xml|ini|conf|png|jpe?g|gif|webp|bmp|svg)$/i.test(t) || seen.has(t)) continue;
+    if (!EXT.test(t) || seen.has(t)) continue;
     seen.add(t); out.push(t);
     if (out.length >= 60) break;
   }
